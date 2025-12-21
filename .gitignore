@@ -46,7 +46,6 @@ htmlcov/
 Thumbs.db
 
 # Exports
-*.json
 *.csv
 *.xml
 *.pickle

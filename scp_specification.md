@@ -60,7 +60,7 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
     "section": "blog",
     "type": "snapshot",
     "generated": "2024-03-31T23:59:59Z",
-    "checksum": "sha256:abc123def456789...",
+    "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "version": "0.1"
   }
 }
@@ -75,7 +75,7 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
     "type": "delta",
     "generated": "2025-01-15T23:00:00Z",
     "since": "2025-01-14T00:00:00Z",
-    "checksum": "sha256:def789abc123456...",
+    "checksum": "sha256:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
     "version": "0.1"
   }
 }
@@ -1106,7 +1106,7 @@ Future versions may introduce new content block types or optional fields. Parser
 **Uncompressed .scp file** (before gzip/zstd compression):
 
 ```jsonl
-{"collection":{"id":"example-minimal","section":"all","type":"snapshot","generated":"2025-01-15T10:00:00Z","checksum":"sha256:a1b2c3d4e5f6..","version":"0.1"}}
+{"collection":{"id":"example-minimal","section":"all","type":"snapshot","generated":"2025-01-15T10:00:00Z","checksum":"sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","version":"0.1"}}
 {"url":"https://example.com/","title":"Home Page","description":"Welcome to our site","modified":"2025-01-15T09:00:00Z","language":"en","content":[{"type":"heading","level":1,"text":"Welcome"},{"type":"text","text":"Hello World!"}]}
 {"url":"https://example.com/about","title":"About Us","description":"Learn about our company","author":"John Doe","published":"2024-12-01T10:00:00Z","modified":"2025-01-10T15:30:00Z","language":"en","content":[{"type":"heading","level":1,"text":"About Us"},{"type":"text","text":"We are a company."}]}
 ```

@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+# Project information
+site_author: Vasiliy Kiryanov
+site_name: Site Content Protocol (SCP)
+site_description: Collection-based format for efficiently serving web content to crawlers
+
+site_url: https://scp-protocol.org/
+repo_url: https://github.com/crawlcore/scp-protocol
+repo_name: crawlcore/scp-protocol
+edit_uri: edit/main/docs/
+
+plugins:
+  - search
+
+# Copyright
+copyright: "Vasiliy Kiryanov, 2025"
+
+# Configuration
+theme:
+  name: material
+  features:
+    - content.footnote.tooltips
+    - navigation.expand
+    - navigation.indexes
+    - toc.integrate
+    - content.code.copy
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    logo: logo
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+
+extra:
+  social:
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/in/vasiliykiryanov/
+    - icon: fontawesome/brands/twitter
+      link: https://x.com/vasiliykiryanov
+
+
+  generator: false
+
+markdown_extensions:
+  - abbr
+  - attr_list
+  - def_list
+  - footnotes
+  - admonition
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Implementation Guide: implementation.md
+  - CLI Tools: cli-tools.md
