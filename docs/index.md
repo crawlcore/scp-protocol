@@ -55,8 +55,8 @@ Websites pre-generate compressed collections and host them on CDN or Cloud Objec
 **Next Steps**:
 
 1. Community feedback (3 months)
-   - Post to Hacker News, Reddit, tech blogs
-   - Iterate on spec based on feedback
+     - Post to Hacker News, Reddit, tech blogs
+     - Iterate on spec based on feedback
 2. Creation of IETF Internet-Draft (2 months)
 
 **Future**:
