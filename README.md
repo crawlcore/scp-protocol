@@ -1,23 +1,26 @@
 # Site Content Protocol (SCP)
 
-A collection-based protocol that reduces waste of bandwidth, processing power, and energy through pre-generated snapshots and deltas.
+A collection-based format for serving clean, structured web content to AI training systems and search engines. Websites provide pre-generated JSON collections optimized for machine consumption, while end users continue accessing regular HTML pages.
 
 ## The Problem
 
-Web crawlers (search engines, AI bots, aggregators) consume massive bandwidth and server resources by parsing web-pages designed for human viewing.
-With the explosion of AI crawlers, this traffic has become a significant cost for websites and strain on internet infrastructure.
+AI training systems and search engines need massive web content datasets, but current HTML scraping approaches create three critical problems:
+
+1. **Low-quality training data** - Content extracted from HTML is contaminated with navigation menus, advertisements, boilerplate text, and formatting markup, degrading model training quality.
+2. **High infrastructure costs** - Processing complete HTML/CSS/JavaScript responses for millions of pages creates substantial bandwidth and computational overhead for both publishers and crawlers.
+3. **Legal and ethical uncertainty** - Automated scraping exists in a gray area. Websites lack a clear, voluntary mechanism to contribute high-quality content to AI training while maintaining control over their intellectual property.
 
 ## The Solution
 
-SCP enables websites to serve pre-generated collections of their content in compressed format from CDN or Cloud Object Storage.
+SCP provides a voluntary, structured alternative to HTML scraping. Websites generate clean JSON collections from their CMS/database and serve them from CDN or object storage, while crawlers download entire content sections efficiently.
 
-**Target Goals**:
+**Expected Impact**:
 
-- 50-60% bandwidth reduction for initial snapshots vs compressed HTML
-- 90-95% bandwidth reduction with delta updates (after initial download)
-- 90% faster parsing than HTML/CSS/JS processing
-- 90% fewer requests - one download fetches entire site sections
-- Zero impact on user experience (users continue accessing regular sites)
+- **Clean training data**: Structured content without navigation menus, ads, boilerplate, or formatting markup
+- **Voluntary contribution**: Clear mechanism for sites to contribute high-quality content to AI training with explicit consent
+- **Reduced infrastructure costs**: Lower bandwidth and processing overhead for both publishers and crawlers
+- **Efficient updates**: Delta collections deliver only changed pages, minimizing redundant transfers
+- **Zero user impact**: End users continue accessing regular HTML pages
 
 ## Resources
 
