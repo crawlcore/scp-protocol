@@ -1,42 +1,87 @@
 # Site Content Protocol (SCP) Specification v0.1
 
-## Overview
+## Abstract
 
-### Problem
-Web crawlers (search engines, AI bots, aggregators) consume massive bandwidth and server resources by parsing web-pages
-designed for human viewing. With the explosion of AI crawlers, this traffic has become a significant cost for
-websites and strain on internet infrastructure.
+This document defines the Site Content Protocol (SCP), a format for serving structured web content to automated crawlers.
+SCP enables websites to provide pre-generated, compressed collections of content via standard HTTP, which may reduce bandwidth consumption compared to traditional HTML crawling.
+The protocol uses JSON Lines format with gzip or zstd compression, discovered via sitemap.xml extensions, and supports both full snapshots and incremental delta updates.
+This specification defines the file format, collection protocol, HTTP transport requirements, and security considerations for SCP implementations.
 
-### Solution
-SCP (Site Content Protocol) enables websites to serve crawler-optimized content separately from regular human-facing access.
+## Introduction
 
-How it works:
-- Website owners use automation to pre-generate compressed collections of their content (blog posts, documentation, products) in structured JSON format
-- Collections are hosted on CDN (like Cloudflare R2) or Cloud Object storage (like Cloudflare R2) and advertised in sitemap.xml
-- Crawlers download entire sections at once instead of requesting individual pages
-- End users continue browsing unchanged web-sites with zero impact
+### Problem Statement
 
-### Result
-A single download replaces thousands of individual page requests, reducing bandwidth by 50-95% while maintaining complete content fidelity for search engines and AI systems.
+AI training systems require massive web content datasets for language model development and knowledge extraction. Current approaches rely on scraping HTML designed for human browsing, which creates three fundamental problems:
 
-Will be added in the future:
-- Bot verification to ensure only approved crawlers access site content using [Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/)
-- Pay for content to support fair crawler-content creator dynamic using model similar to [Pay Per Crawl](https://blog.cloudflare.com/introducing-pay-per-crawl/)
+1. **Low-quality training data**: Content extraction from HTML produces noisy datasets contaminated with navigation menus, advertisements, boilerplate text, and formatting markup. This degrades model training quality and requires extensive post-processing.
 
-## Design Goals
+2. **High infrastructure costs**: Processing complete HTML/CSS/JavaScript for millions of pages generates substantial bandwidth and computational overhead. Large-scale content indexing systems must process and discard significant portions of retrieved HTML that consist of presentation markup, navigation, and other non-content elements.
 
-### Core Principles
+3. **Legal and ethical uncertainty**: Automated scraping exists in a gray area between technical possibility and copyright/terms-of-service compliance. Sites that wish to contribute high-quality content to AI training have no standard mechanism to do so voluntarily.
 
-1. Efficiency: Minimize bandwidth and processing via collections (batch hundreds/thousands of pages into single requests)
-2. Completeness: Capture all information needed for search indexing and content discovery
-3. Simplicity: Pre-generated collections on CDN / Cloud Object storage with delta updates
+The Site Content Protocol addresses these problems by providing a standard format for websites to voluntarily publish clean, structured content optimized for automated consumption, reducing infrastructure costs while improving data quality and establishing clear consent.
 
-### Target Metrics
+### Solution Overview
 
-- 50-60% bandwidth savings for initial snapshots vs compressed HTML
-- 90-95% bandwidth savings with delta updates (after initial download)
-- 90% faster parsing than HTML/CSS/JS processing
-- 90% fewer requests (one download fetches entire site sections instead of page-by-page crawling)
+The Site Content Protocol (SCP) enables websites to serve crawler-optimized content separately from regular human-facing access:
+
+1. Website owners pre-generate compressed collections of their content (blog posts, documentation, products) in structured JSON format
+2. Collections are hosted on CDN or Cloud Object Storage and advertised in sitemap.xml
+3. Crawlers download entire sections at once instead of requesting individual pages
+4. End users continue browsing unchanged websites with zero impact
+
+A single download replaces thousands of individual page requests, reducing infrastructure overhead while maintaining complete content fidelity for automated crawlers.
+Bandwidth efficiency depends on content type, update frequency, and compression effectiveness.
+
+### Goals and Non-Goals
+
+**Goals:**
+
+- Reduce bandwidth consumption and server load for web crawling
+- Provide complete, structured content for search indexing and content discovery
+- Minimize implementation complexity for both publishers and crawlers
+- Leverage existing HTTP standards and infrastructure (sitemap.xml, standard HTTP caching)
+- Enable efficient incremental updates via delta collections
+
+**Non-Goals:**
+
+- Replace HTML for human-facing web browsing
+- Provide real-time API access to content
+- Support interactive or dynamic content
+- Define authentication mechanisms for automated crawlers
+- Define payment mechanisms for content access
+
+### Expected Performance Characteristics
+
+The following characteristics are expected based on the protocol design, though actual results will vary by implementation and content:
+
+**Bandwidth efficiency:**
+- Initial snapshots provide size reduction compared to downloading all pages as compressed HTML
+- Delta updates provide substantial bandwidth savings compared to re-downloading full snapshots
+- For sites already using HTTP conditional requests (ETag/If-Modified-Since) effectively, bandwidth savings will be lower, but SCP still provides:
+  - Request count reduction (1 collection request vs. thousands of conditional requests, even if most return 304 Not Modified)
+  - Better batch compression efficiency (compressing multiple pages together vs. individual page compression)
+  - Simpler content extraction (structured JSON vs. HTML/CSS/JS parsing)
+
+**Processing efficiency:**
+- JSON parsing may be significantly faster than HTML/CSS/JS processing
+- Structured content blocks eliminate need for DOM traversal and content extraction heuristics
+
+Performance claims should be validated through implementation-specific benchmarking.
+
+## Terminology and Conventions
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all capitals, as shown here.
+
+This specification uses the following terms:
+
+- **Automated Crawler**: An automated agent that retrieves and indexes web content. This includes search engines, AI training systems, content aggregators, and other automated indexing services.
+- **Collection**: A pre-generated file containing metadata and page objects in JSON Lines format
+- **Snapshot**: A complete collection representing the full state of a content section
+- **Delta**: An incremental collection containing only pages modified since a previous snapshot or delta
+- **Section**: A logical grouping of related pages (e.g., "blog", "docs", "products")
+- **Page**: A single web page represented as a JSON object with metadata and content blocks
+- **Content Block**: A structured representation of page content (text, heading, image, etc.)
 
 ## File Format
 
@@ -44,11 +89,13 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
 
 ### Structure
 
-- File extension: `.scp.gz` (gzip) or `.scp.zst` (zstd)
-- Content-Type: `application/x-ndjson+gzip` or `application/x-ndjson+zstd`
+- File extension: `.scp.gz` (gzip), `.scp.zst` (zstd), or `.scp` (uncompressed)
+- Content-Type: `application/scp`
+- Content-Encoding: `gzip` or `zstd` (for compressed files)
 - Format: One JSON object per line, each line represents one page
-- First line: Collection metadata (optional)
-- Subsequent lines: Individual pages
+- First line MUST contain collection metadata
+- Subsequent lines: Individual pages (one page per line)
+- Compression: Entire file is compressed after JSON Lines construction (no partial compression)
 
 ### Collection Metadata
 
@@ -56,10 +103,10 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
 ```json
 {
   "collection": {
-    "id": "blog-snapshot-2024-Q1",
+    "id": "blog-snapshot-q1",
     "section": "blog",
     "type": "snapshot",
-    "generated": "2024-03-31T23:59:59Z",
+    "generated": "2000-03-31T23:59:59Z",
     "checksum": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "version": "0.1"
   }
@@ -70,11 +117,11 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
 ```json
 {
   "collection": {
-    "id": "blog-delta-2025-01-15",
+    "id": "blog-delta-day15",
     "section": "blog",
     "type": "delta",
-    "generated": "2025-01-15T23:00:00Z",
-    "since": "2025-01-14T00:00:00Z",
+    "generated": "2000-01-15T23:00:00Z",
+    "since": "2000-01-14T00:00:00Z",
     "checksum": "sha256:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
     "version": "0.1"
   }
@@ -89,7 +136,7 @@ SCP collections use JSON Lines (newline-delimited JSON) format, compressed with 
   - `generated` (string, required): ISO 8601 timestamp when collection was created
   - `since` (string, required for delta): ISO 8601 timestamp indicating changes since this time (delta collections only)
   - `checksum` (string, optional): SHA-256 checksum for integrity verification (format: "sha256:hexdigest")
-  - `version` (string, required): SCP format version
+  - `version` (string, required): SCP format version (e.g., "0.1"). Parsers SHOULD ignore unknown fields for forward compatibility.
 
 ### Page Schema
 
@@ -101,8 +148,8 @@ Each subsequent line is a JSON object representing one page:
   "title": "Page Title",
   "description": "Meta description for SEO",
   "author": "John Doe",
-  "published": "2024-01-15T10:30:00Z",
-  "modified": "2024-01-20T14:22:00Z",
+  "published": "2000-01-15T10:30:00Z",
+  "modified": "2000-01-20T14:22:00Z",
   "language": "en",
   "canonical": "https://example.com/blog/post-title",
   "robots": ["noarchive"],
@@ -121,9 +168,8 @@ Each subsequent line is a JSON object representing one page:
     {"type": "code", "language": "python", "code": "print('Hello')"},
     {"type": "table", "rows": [["Cell 1", "Cell 2"], ["Cell 3", "Cell 4"]]},
     {"type": "quote", "text": "Quote text", "citation": "Source"},
-    {"type": "video", "sources": [{"url": "https://example.com/video.mp4"}], "title": "Video Title"},
-    {"type": "audio", "sources": [{"url": "https://example.com/audio.mp3"}], "title": "Audio Title"},
-    {"type": "structured", "format": "json-ld", "data": {...}}
+    {"type": "video", "name": "Video Title", "url": [{"href": "https://example.com/video.mp4", "mediaType": "video/mp4"}]},
+    {"type": "audio", "name": "Audio Title", "url": [{"href": "https://example.com/audio.mp3", "mediaType": "audio/mpeg"}]}
   ]
 }
 ```
@@ -148,6 +194,8 @@ Each subsequent line is a JSON object representing one page:
 The optional `schema` field allows sites to include Schema.org structured data for enhanced search results and semantic understanding.
 
 **When to use:**
+
+The `schema` field SHOULD be used when Schema.org defines a standardized type for the content. Common examples include:
 - **Products**: Add pricing, ratings, availability, brand information
 - **Recipes**: Include ingredients, cooking time, nutrition information
 - **Events**: Provide dates, locations, ticket information
@@ -159,13 +207,40 @@ The optional `schema` field allows sites to include Schema.org structured data f
 - Documentation pages
 - Static content pages
 
+#### Relationship to Page-Level Fields
+
+Page-level metadata fields (`title`, `description`, `author`, `published`, `modified`) are REQUIRED basic metadata.
+When the optional `schema` field is provided with Schema.org structured data, the following correspondences exist:
+
+**Field mappings:**
+- `title` ↔ Schema.org `name` (for Product, Organization, etc.) or `headline` (for Article, BlogPosting, etc.)
+- `description` ↔ Schema.org `description`
+- `author` ↔ Schema.org `author` (as Person or Organization type)
+- `published` ↔ Schema.org `datePublished`
+- `modified` ↔ Schema.org `dateModified`
+
+**Processing model:**
+
+When extracting structured data, crawlers SHOULD:
+1. Use Schema.org properties when present and processing structured data
+2. Fall back to page-level fields when Schema.org properties are absent
+3. Use page-level fields for basic page indexing regardless of schema presence
+
+**Consistency recommendations:**
+
+Implementations SHOULD maintain consistency between corresponding page-level and Schema.org fields when both represent the same information.
+However, the following differences are acceptable:
+- Page `title` MAY include SEO optimization, branding suffixes, or formatting that differs from Schema.org `name` or `headline`
+- Page `description` MAY include calls-to-action or promotional text that differs from Schema.org `description`
+- Schema.org fields SHOULD represent the canonical, semantic identity of the content entity
+
 **Example - Product with Schema.org:**
 ```json
 {
   "url": "https://store.com/products/amazing-widget",
   "title": "Amazing Widget - Premium Quality",
   "description": "The best widget on the market",
-  "modified": "2025-01-15T10:00:00Z",
+  "modified": "2000-01-15T10:00:00Z",
   "language": "en",
   "schema": {
     "@context": "https://schema.org",
@@ -182,31 +257,6 @@ The optional `schema` field allows sites to include Schema.org structured data f
       "@type": "AggregateRating",
       "ratingValue": "4.5",
       "reviewCount": "89"
-    }
-  },
-  "content": [...]
-}
-```
-
-**Example - Recipe with Schema.org:**
-```json
-{
-  "url": "https://recipes.com/chocolate-cake",
-  "title": "Best Chocolate Cake Recipe",
-  "description": "Moist and delicious chocolate cake",
-  "modified": "2025-01-15T10:00:00Z",
-  "language": "en",
-  "schema": {
-    "@context": "https://schema.org",
-    "@type": "Recipe",
-    "name": "Chocolate Cake",
-    "recipeYield": "8 servings",
-    "prepTime": "PT30M",
-    "cookTime": "PT45M",
-    "recipeIngredient": ["2 cups flour", "1 cup sugar", "3/4 cup cocoa powder"],
-    "nutrition": {
-      "@type": "NutritionInformation",
-      "calories": "320 calories"
     }
   },
   "content": [...]
@@ -262,19 +312,26 @@ The optional `schema` field allows sites to include Schema.org structured data f
 - `citation` (optional): Attribution
 
 #### Video
+
+Video content blocks use ActivityStreams 2.0 [ACTIVITYSTREAMS] Video object properties with SCP extensions for crawler needs.
+
 ```json
 {
   "type": "video",
-  "sources": [
-    {"url": "https://example.com/video.mp4", "format": "mp4", "quality": "1080p", "size": 52428800},
-    {"url": "https://example.com/video.webm", "format": "webm", "quality": "720p", "size": 31457280}
+  "name": "Video Title",
+  "url": [
+    {"href": "https://example.com/video.mp4", "mediaType": "video/mp4"},
+    {"href": "https://example.com/video.webm", "mediaType": "video/webm"},
+    {"href": "https://youtube.com/watch?v=xyz123", "mediaType": "text/html", "rel": "alternate"}
   ],
-  "poster": "https://example.com/thumbnail.jpg",
-  "title": "Video Title",
-  "description": "Video description",
-  "duration": 300,
+  "duration": "PT5M20S",
   "width": 1920,
   "height": 1080,
+  "icon": {
+    "type": "Image",
+    "url": "https://example.com/thumbnail.jpg"
+  },
+  "summary": "Video description",
   "captions": [
     {"language": "en", "url": "https://example.com/captions-en.vtt", "label": "English"},
     {"language": "es", "url": "https://example.com/captions-es.vtt", "label": "Español"}
@@ -283,68 +340,63 @@ The optional `schema` field allows sites to include Schema.org structured data f
     {"time": 0, "title": "Introduction"},
     {"time": 60, "title": "Main Content"}
   ],
-  "embed": "https://youtube.com/watch?v=xyz123",
   "transcript": "Full text transcript of video content..."
 }
 ```
-- `sources` (required): Array of video sources with different formats/qualities
-- `poster` (optional): Thumbnail image URL
-- `title` (required): Video title
-- `description` (optional): Video description
-- `duration` (optional): Duration in seconds
+
+**ActivityStreams 2.0 properties:**
+- `name` (required): Video title
+- `url` (required): Video URL(s). Can be a single URL string or array of objects with `href` and `mediaType`
+- `duration` (optional): Duration in ISO 8601 format (e.g., "PT5M20S" for 5 minutes 20 seconds)
 - `width`, `height` (optional): Video dimensions in pixels
-- `captions` (optional): Array of caption/subtitle files
-- `chapters` (optional): Array of chapter markers
-- `embed` (optional): External platform embed URL (YouTube, Vimeo, etc.)
+- `icon` (optional): Thumbnail/poster image as Image object
+- `summary` (optional): Video description
+
+**SCP extensions for crawler/accessibility needs:**
+- `captions` (optional): Array of caption/subtitle files (WebVTT format)
+- `chapters` (optional): Array of chapter markers with time (seconds) and title
 - `transcript` (optional): Full text transcript for search indexing
 
-**Simplified format** (single source):
-```json
-{"type": "video", "sources": [{"url": "https://example.com/video.mp4"}], "title": "Title"}
-```
-
 #### Audio
+
+Audio content blocks use ActivityStreams 2.0 [ACTIVITYSTREAMS] Audio object properties with SCP extensions for crawler needs.
+
 ```json
 {
   "type": "audio",
-  "sources": [
-    {"url": "https://example.com/podcast.mp3", "format": "mp3", "bitrate": 320, "size": 7340032},
-    {"url": "https://example.com/podcast.ogg", "format": "ogg", "bitrate": 256, "size": 5898240}
+  "name": "Episode 42: Web Standards",
+  "url": [
+    {"href": "https://example.com/podcast.mp3", "mediaType": "audio/mpeg"},
+    {"href": "https://example.com/podcast.ogg", "mediaType": "audio/ogg"}
   ],
-  "title": "Episode 42: Web Standards",
-  "description": "Discussion about web protocols",
-  "artist": "Tech Podcast",
-  "album": "Season 3",
-  "duration": 3600,
-  "coverArt": "https://example.com/cover.jpg",
-  "transcript": "Full text transcript...",
+  "duration": "PT1H",
+  "icon": {
+    "type": "Image",
+    "url": "https://example.com/cover.jpg"
+  },
+  "summary": "Discussion about web protocols",
+  "attributedTo": "Tech Podcast",
+  "partOf": "Season 3",
   "chapters": [
     {"time": 0, "title": "Introduction"},
     {"time": 300, "title": "Main Discussion"}
-  ]
+  ],
+  "transcript": "Full text transcript of audio content..."
 }
 ```
-- `sources` (required): Array of audio sources with different formats
-- `title` (required): Audio title
-- `description` (optional): Audio description
-- `artist` (optional): Artist/creator name
-- `album` (optional): Album/series name
-- `duration` (optional): Duration in seconds
-- `coverArt` (optional): Cover image URL
+
+**ActivityStreams 2.0 properties:**
+- `name` (required): Audio title
+- `url` (required): Audio URL(s). Can be a single URL string or array of objects with `href` and `mediaType`
+- `duration` (optional): Duration in ISO 8601 format (e.g., "PT1H" for 1 hour, "PT5M30S" for 5 minutes 30 seconds)
+- `icon` (optional): Cover art/thumbnail image as Image object
+- `summary` (optional): Audio description
+- `attributedTo` (optional): Artist/creator name or Person object
+- `partOf` (optional): Album/series name or Collection object
+
+**SCP extensions for crawler/accessibility needs:**
+- `chapters` (optional): Array of chapter markers with time (seconds) and title
 - `transcript` (optional): Full text transcript for search indexing
-- `chapters` (optional): Array of chapter markers
-
-**Simplified format** (single source):
-```json
-{"type": "audio", "sources": [{"url": "https://example.com/audio.mp3"}], "title": "Title"}
-```
-
-#### Structured Data
-```json
-{"type": "structured", "format": "json-ld", "data": {"@context": "https://schema.org", ...}}
-```
-- `format`: "json-ld", "microdata", or "schema-org"
-- `data`: Structured data object
 
 ## JSON Schema
 
@@ -352,7 +404,7 @@ The optional `schema` field allows sites to include Schema.org structured data f
 
 ```json
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": ["url", "title", "description", "modified", "language", "content"],
   "properties": {
@@ -494,29 +546,43 @@ The optional `schema` field allows sites to include Schema.org structured data f
         },
         {
           "type": "object",
-          "required": ["type", "sources", "title"],
+          "required": ["type", "name", "url"],
           "properties": {
             "type": {"const": "video"},
-            "sources": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "required": ["url"],
-                "properties": {
-                  "url": {"type": "string", "format": "uri"},
-                  "format": {"type": "string"},
-                  "quality": {"type": "string"},
-                  "size": {"type": "integer"}
+            "name": {"type": "string"},
+            "url": {
+              "oneOf": [
+                {"type": "string", "format": "uri"},
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["href", "mediaType"],
+                    "properties": {
+                      "href": {"type": "string", "format": "uri"},
+                      "mediaType": {"type": "string"},
+                      "rel": {"type": "string"}
+                    }
+                  }
                 }
-              }
+              ]
             },
-            "poster": {"type": "string", "format": "uri"},
-            "title": {"type": "string"},
-            "description": {"type": "string"},
-            "duration": {"type": "integer", "minimum": 0},
+            "duration": {
+              "type": "string",
+              "pattern": "^PT(?=.*[HMS])(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+              "description": "ISO 8601 duration format (e.g., PT5M20S). Requires at least one component (H, M, or S)."
+            },
             "width": {"type": "integer", "minimum": 0},
             "height": {"type": "integer", "minimum": 0},
+            "icon": {
+              "type": "object",
+              "properties": {
+                "type": {"const": "Image"},
+                "url": {"type": "string", "format": "uri"}
+              }
+            },
+            "summary": {"type": "string"},
             "captions": {
               "type": "array",
               "items": {
@@ -540,36 +606,47 @@ The optional `schema` field allows sites to include Schema.org structured data f
                 }
               }
             },
-            "embed": {"type": "string", "format": "uri"},
             "transcript": {"type": "string"}
           }
         },
         {
           "type": "object",
-          "required": ["type", "sources", "title"],
+          "required": ["type", "name", "url"],
           "properties": {
             "type": {"const": "audio"},
-            "sources": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "required": ["url"],
-                "properties": {
-                  "url": {"type": "string", "format": "uri"},
-                  "format": {"type": "string"},
-                  "bitrate": {"type": "integer"},
-                  "size": {"type": "integer"}
+            "name": {"type": "string"},
+            "url": {
+              "oneOf": [
+                {"type": "string", "format": "uri"},
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["href", "mediaType"],
+                    "properties": {
+                      "href": {"type": "string", "format": "uri"},
+                      "mediaType": {"type": "string"}
+                    }
+                  }
                 }
+              ]
+            },
+            "duration": {
+              "type": "string",
+              "pattern": "^PT(?=.*[HMS])(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+              "description": "ISO 8601 duration format (e.g., PT1H for 1 hour). Requires at least one component (H, M, or S)."
+            },
+            "icon": {
+              "type": "object",
+              "properties": {
+                "type": {"const": "Image"},
+                "url": {"type": "string", "format": "uri"}
               }
             },
-            "title": {"type": "string"},
-            "description": {"type": "string"},
-            "artist": {"type": "string"},
-            "album": {"type": "string"},
-            "duration": {"type": "integer", "minimum": 0},
-            "coverArt": {"type": "string", "format": "uri"},
-            "transcript": {"type": "string"},
+            "summary": {"type": "string"},
+            "attributedTo": {"type": "string"},
+            "partOf": {"type": "string"},
             "chapters": {
               "type": "array",
               "items": {
@@ -580,19 +657,8 @@ The optional `schema` field allows sites to include Schema.org structured data f
                   "title": {"type": "string"}
                 }
               }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "required": ["type", "format", "data"],
-          "properties": {
-            "type": {"const": "structured"},
-            "format": {
-              "type": "string",
-              "enum": ["json-ld", "microdata", "schema-org"]
             },
-            "data": {"type": "object"}
+            "transcript": {"type": "string"}
           }
         }
       ]
@@ -605,7 +671,7 @@ The optional `schema` field allows sites to include Schema.org structured data f
 
 ```json
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "required": ["collection"],
   "properties": {
@@ -657,22 +723,9 @@ The optional `schema` field allows sites to include Schema.org structured data f
 }
 ```
 
-
-## Compression
-
-**Recommended**:
-- **gzip level 6**: Broad compatibility, good compression
-- **zstd level 9**: Better compression ratio, modern standard
-
-**File extensions**:
-- `.scp.gz` for gzip
-- `.scp.zst` for zstd
-
-Entire file is compressed after JSON Lines construction. No partial compression.
-
 ## Validation
 
-Parsers SHOULD validate:
+Parsers MUST validate:
 
 1. **File decompression**: Verify compressed file can be decompressed
 2. **JSON validity**: Each line must be valid JSON
@@ -689,7 +742,7 @@ Parsers SHOULD validate:
 - Decompression ratio exceeds 100:1 (compression bomb protection)
 
 ### Non-Fatal Errors (skip line, continue parsing):
-- Unknown content block `type` (log warning, skip block)
+- **Unknown content block type**: Parsers encountering unknown content block types MUST log a warning, MAY skip the block, and MUST continue processing the remaining content blocks and pages
 - Invalid URL format (log warning, skip page)
 - Heading level outside 1-6 (clamp to nearest valid value)
 
@@ -722,27 +775,27 @@ Sites advertise SCP collections in `sitemap.xml` using an extended namespace:
 
   <!-- Snapshot Collections (full state) -->
   <scp:collection section="blog" type="snapshot"
-                  url="https://r2.example.com/collections/blog-snapshot-2025-01-15.scp.gz"
-                  generated="2025-01-15T00:00:00Z" expires="2025-01-16T00:00:00Z"
+                  url="https://r2.example.com/collections/blog-snapshot-day15.scp.gz"
+                  generated="2000-01-15T00:00:00Z" expires="2000-01-16T00:00:00Z"
                   pages="5247" size="52000000"/>
 
   <scp:collection section="all" type="snapshot"
                   url="https://r2.example.com/collections/all-snapshot-latest.scp.gz"
-                  generated="2025-01-15T00:00:00Z" expires="2025-01-16T00:00:00Z"
+                  generated="2000-01-15T00:00:00Z" expires="2000-01-16T00:00:00Z"
                   pages="12450" size="125000000"/>
 
   <!-- Delta Collections (incremental changes) -->
-  <scp:delta section="blog" period="2025-01-15"
-             url="https://r2.example.com/collections/blog-delta-2025-01-15.scp.gz"
-             generated="2025-01-15T23:00:00Z" expires="2025-01-17T00:00:00Z"
+  <scp:delta section="blog" period="day15"
+             url="https://r2.example.com/collections/blog-delta-day15.scp.gz"
+             generated="2000-01-15T23:00:00Z" expires="2000-01-17T00:00:00Z"
              pages="47" size="480000"
-             since="2025-01-14T00:00:00Z"/>
+             since="2000-01-14T00:00:00Z"/>
 
-  <scp:delta section="all" period="2025-01-15"
-             url="https://r2.example.com/collections/all-delta-2025-01-15.scp.gz"
-             generated="2025-01-15T23:00:00Z" expires="2025-01-17T00:00:00Z"
+  <scp:delta section="all" period="day15"
+             url="https://r2.example.com/collections/all-delta-day15.scp.gz"
+             generated="2000-01-15T23:00:00Z" expires="2000-01-17T00:00:00Z"
              pages="124" size="1250000"
-             since="2025-01-14T00:00:00Z"/>
+             since="2000-01-14T00:00:00Z"/>
 </urlset>
 ```
 
@@ -957,7 +1010,7 @@ The SCP sitemap extension namespace is formally defined by the following XML Sch
 - Highly cacheable (24h+ TTL for daily updates)
 - First crawl downloads full snapshot
 
-####  Delta Collections
+#### Delta Collections
 
 **Incremental changes**, contains only modified/new pages:
 
@@ -975,97 +1028,118 @@ The SCP sitemap extension namespace is formally defined by the following XML Sch
 - Much smaller than snapshots (typically <1% of snapshot size)
 - Subsequent crawls download deltas and merge locally
 
-### Crawler Workflow
-
-**Initial Crawl**:
-1. Parse sitemap.xml
-2. Download snapshot collection for each section
-3. Index all pages
-
-**Incremental Updates**:
-1. Check sitemap for new delta collections
-2. Download delta-2025-01-15.scp.gz (47 pages)
-3. Download delta-2025-01-16.scp.gz (89 pages)
-4. Merge deltas into local index (update/add pages)
-5. Optionally: Re-download full snapshot periodically (weekly/monthly) to ensure consistency
-
-**Example Timeline**:
-- Day 1: Download blog-snapshot (5,247 pages, 52 MB)
-- Day 2: Download blog-delta-2025-01-16 (47 pages, 480 KB)
-- Day 3: Download blog-delta-2025-01-17 (89 pages, 920 KB)
-- Day 4: Download blog-delta-2025-01-18 (124 pages, 1.2 MB)
-
-**Bandwidth savings**: 54.6 MB vs. 208 MB traditional (4 daily full crawls) = **74% bandwidth reduction**
-
 ### Direct Download from Sitemap
 
 Crawlers download collections directly from URLs advertised in `sitemap.xml`:
 
 1. Parse sitemap.xml to find snapshot and delta URLs
-2. Download files directly from CDN (e.g., Cloudflare R2)
+2. Download files directly from CDN or object storage
 3. No query endpoint needed - all collections are pre-generated
-4. Collections can be accessible with standard HTTP GET
+4. Collections are accessible with standard HTTP GET
 
-**Example**:
-```bash
-# Download snapshot
-curl https://r2.example.com/collections/blog-snapshot-2025-01-15.scp.gz
+Collections are downloaded directly via HTTP GET requests to the URLs advertised in sitemap.xml. Standard HTTP features (caching, conditional requests, compression) apply.
 
-# Download delta
-curl https://r2.example.com/collections/blog-delta-2025-01-15.scp.gz
+## Use with HTTP
+
+This section defines how SCP collections are served and accessed over HTTP, following standards defined in [RFC7230] (HTTP/1.1 Message Syntax and Routing), [RFC7231] (HTTP/1.1 Semantics and Content), [RFC7232] (HTTP/1.1 Conditional Requests), and [RFC7234] (HTTP/1.1 Caching).
+
+### Content-Type and Encoding
+
+Servers MUST set appropriate Content-Type and Content-Encoding headers when serving SCP collections:
+
+**For gzip-compressed collections** (`.scp.gz`):
+```http
+Content-Type: application/scp
+Content-Encoding: gzip
 ```
 
-### Caching and Hosting
-
-Snapshot and delta collections SHOULD be hosted on CDN/object storage:
-
-**Recommended: Cloudflare R2**
-- High bandwidth allowance
-- Global CDN distribution
-- No egress fees
-
-**R2 URL Structure**:
-```
-https://r2.example.com/collections/blog-snapshot-2025-01-15.scp.gz
-https://r2.example.com/collections/blog-delta-2025-01-15.scp.gz
+**For zstd-compressed collections** (`.scp.zst`):
+```http
+Content-Type: application/scp
+Content-Encoding: zstd
 ```
 
-**TTL Strategy**:
-- Snapshots: 24-48 hours (based on updateFreq)
-- Deltas: 24-72 hours (keep recent deltas available)
-- Old deltas can be removed after crawlers have had time to fetch them
+**For uncompressed collections** (`.scp`):
+```http
+Content-Type: application/scp
+```
 
-**Public Access**: Collections are publicly accessible via standard HTTPS. No authentication required for reading.
+Servers SHOULD include the Content-Length header to indicate the file size (compressed or uncompressed).
 
-**Rate Limiting** (optional):
-- CDNs typically handle rate limiting automatically
-- For self-hosted: Apply standard rate limits per IP/bot
-- Return `429 Too Many Requests` with `Retry-After` header when exceeded
+### Conditional Requests
 
-## Implementation Checklist
+To avoid unnecessary downloads, servers SHOULD support HTTP conditional requests as defined in [RFC7232], and crawlers SHOULD use them.
 
-### For Website Owners
+#### Server-Side Requirements
 
-- [ ] Define content sections (e.g., blog, docs, products)
-- [ ] Implement snapshot generator (generates full section collections)
-- [ ] Implement delta generator (generates incremental change collections)
-- [ ] Configure Cloudflare R2 or similar CDN/object storage
-- [ ] Set up automated generation schedule (hourly/daily based on updateFreq)
-- [ ] Upload snapshot and delta files to CDN/object storage
-- [ ] Add SCP metadata to sitemap.xml with snapshot and delta URLs
-- [ ] Clean up old delta files periodically (keep last 7-30 days)
+Servers SHOULD provide `ETag` and `Last-Modified` headers with collection responses:
 
-### For Crawler Developers
+```http
+HTTP/1.1 200 OK
+Content-Type: application/scp
+Content-Encoding: gzip
+Content-Length: 52000000
+ETag: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+Last-Modified: Wed, 15 Jan 2025 23:00:00 GMT
+Cache-Control: public, max-age=86400
 
-- [ ] Parse sitemap.xml for snapshot and delta collection URLs
-- [ ] Download snapshot collections on initial crawl
-- [ ] Download delta collections for incremental updates
-- [ ] Implement JSON Lines parser (decompress + parse line-by-line)
-- [ ] Handle compressed files (.scp.gz with gzip, .scp.zst with zstd)
-- [ ] Validate JSON schema for each page object
-- [ ] Merge delta updates into local index (update/insert pages)
-- [ ] Track which deltas have been processed to avoid duplicates
-- [ ] Periodically re-download full snapshots for consistency
+[collection data]
+```
+
+**ETag format**: Servers SHOULD use the SHA-256 checksum from the collection metadata as the ETag value:
+```
+ETag: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+```
+
+**Last-Modified format**: Servers SHOULD use the collection's `generated` timestamp converted to HTTP-date format as defined in [RFC7231] Section 7.1.1.1.
+
+Servers MUST respond with `304 Not Modified` when the `If-None-Match` or `If-Modified-Since` conditions indicate the client's cached version is current.
+
+#### Crawler-Side Requirements
+
+On subsequent requests to previously downloaded collections, crawlers SHOULD send conditional request headers:
+
+```http
+GET /collections/blog-snapshot-2025-01-15.scp.gz HTTP/1.1
+Host: r2.example.com
+If-None-Match: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+If-Modified-Since: Wed, 15 Jan 2025 23:00:00 GMT
+```
+
+**Handling responses**:
+- **304 Not Modified**: Skip download; cached collection is current
+- **200 OK**: Download new version; collection has been updated
+
+**Crawler requirements**:
+1. Crawlers MUST store the `ETag` and `Last-Modified` values from successful (200 OK) responses
+2. Crawlers SHOULD send both `If-None-Match` and `If-Modified-Since` when available
+3. Crawlers MUST handle `304 Not Modified` responses by using their cached version
+
+This optimization is especially valuable for:
+- Snapshots that don't change frequently (daily/weekly)
+- Checking for deltas that might not exist for all time periods
+- Reducing CDN egress costs
+
+### Caching Directives
+
+Servers SHOULD include Cache-Control headers as defined in [RFC7234] to indicate caching behavior. Cache duration SHOULD be chosen based on the collection's update frequency declared in sitemap.xml.
+
+**Recommended for snapshots** (updated daily/weekly):
+```http
+Cache-Control: public, max-age=86400, stale-while-revalidate=3600
+```
+- `public`: Content is cacheable by any cache
+- `max-age`: RECOMMENDED to match or exceed the update interval (e.g., 86400 for daily updates, 604800 for weekly)
+- `stale-while-revalidate`: OPTIONAL directive to serve stale content while fetching fresh version
+
+**Recommended for deltas** (updated frequently):
+```http
+Cache-Control: public, max-age=3600, must-revalidate
+```
+- `max-age`: RECOMMENDED to be shorter than snapshots (e.g., 3600 for hourly updates)
+- `must-revalidate`: RECOMMENDED to ensure crawlers check for newer deltas
+
+Servers MAY use different cache durations based on their specific update patterns and infrastructure requirements.
 
 ## Security Considerations
 
@@ -1081,23 +1155,94 @@ https://r2.example.com/collections/blog-delta-2025-01-15.scp.gz
 4. **Schema validation**: Verify required fields exist and have correct types
 5. **URL sanitization**: Validate and sanitize all URLs (page URLs and content URLs)
 6. **Content sanitization**: Sanitize text content as you would with HTML (XSS prevention)
-7. **Rate limiting**: Apply normal rate limits to SCP query endpoints
+7. **Rate limiting**: Apply normal rate limits to collection HTTP requests to prevent abuse
 
-## Versioning
+## IANA Considerations
 
-Version is indicated in the collection metadata's `version` field and sitemap's `<scp:version>` element.
+This section requests IANA to register a media type and namespace identifier for the Site Content Protocol.
 
-**Sitemap version declaration**:
-```xml
-<scp:version>0.1</scp:version>
-```
+### Media Type Registration
 
-**Collection metadata version**:
-```json
-{"collection": {"version": "0.1", ...}}
-```
+This document requests the registration of the media type `application/scp` in accordance with [RFC6838].
 
-Future versions may introduce new content block types or optional fields. Parsers SHOULD ignore unknown fields gracefully.
+#### Media Type: application/scp
+
+- **Type name:** application
+- **Subtype name:** scp
+- **Required parameters:** N/A
+- **Optional parameters:** N/A
+- **Encoding considerations:** Binary. SCP collections are newline-delimited JSON (JSON Lines) that MAY be compressed using gzip or zstd compression. When compressed, the `Content-Encoding` header indicates the compression method used (gzip or zstd).
+- **Security considerations:** See Section "Security Considerations" of this document. SCP collections should be validated for: JSON syntax correctness, schema compliance, size limits (compressed and decompressed), decompression bomb protection (100:1 ratio limit), and URL sanitization.
+- **Interoperability considerations:**
+  - Uncompressed files use newline-delimited JSON format (JSON Lines) as defined in [JSONLINES]
+  - Compressed files require gzip (RFC1952) or zstd decompression support
+  - Compression method is indicated via the `Content-Encoding` HTTP header, not the media type
+  - Parsers MUST support JSON Lines format and SHOULD support both gzip and zstd decompression
+- **Published specification:** This document (Site Content Protocol Specification)
+- **Applications that use this media type:** Web crawlers, search engines, content indexing systems, site content aggregators, AI training systems
+- **Fragment identifier considerations:** N/A
+- **Additional information:**
+  - **Magic number(s):** None (JSON Lines format). When compressed: 1F 8B (gzip), 28 B5 2F FD (zstd)
+  - **File extension(s):** .scp (uncompressed), .scp.gz (gzip-compressed), .scp.zst (zstd-compressed)
+  - **Macintosh file type code(s):** N/A
+- **Person & email address to contact for further information:** vasiliy.kiryanov@gmail.com
+- **Intended usage:** COMMON
+- **Restrictions on usage:** None
+- **Author:** Vasiliy Kiryanov
+- **Change controller:** IETF
+
+### XML Namespace Registration
+
+This document requests registration of the following XML namespace in the IETF XML Registry as defined in [RFC3688].
+
+- **URI:** https://scp-protocol.org/schemas/sitemap/1.0
+- **Registrant Contact:** vasiliy.kiryanov@gmail.com
+- **XML:** The XML Schema Definition (XSD) is provided in Section "Sitemap XML Schema Definition"
+
+## References
+
+### Normative References
+
+**[RFC2119]**
+Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, DOI 10.17487/RFC2119, March 1997, <https://www.rfc-editor.org/info/rfc2119>.
+
+**[RFC3688]**
+Mealling, M., "The IETF XML Registry", BCP 81, RFC 3688, DOI 10.17487/RFC3688, January 2004, <https://www.rfc-editor.org/info/rfc3688>.
+
+**[RFC8174]**
+Lepper, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174, May 2017, <https://www.rfc-editor.org/info/rfc8174>.
+
+**[RFC6838]**
+Freed, N., Klensin, J., and T. Hansen, "Media Type Specifications and Registration Procedures", BCP 13, RFC 6838, DOI 10.17487/RFC6838, January 2013, <https://www.rfc-editor.org/info/rfc6838>.
+
+**[RFC7230]**
+Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and Routing", RFC 7230, DOI 10.17487/RFC7230, June 2014, <https://www.rfc-editor.org/info/rfc7230>.
+
+**[RFC7231]**
+Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content", RFC 7231, DOI 10.17487/RFC7231, June 2014, <https://www.rfc-editor.org/info/rfc7231>.
+
+**[RFC7232]**
+Fielding, R., Ed. and J. Reschke, Ed., "Hypertext Transfer Protocol (HTTP/1.1): Conditional Requests", RFC 7232, DOI 10.17487/RFC7232, June 2014, <https://www.rfc-editor.org/info/rfc7232>.
+
+**[RFC7234]**
+Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke, Ed., "Hypertext Transfer Protocol (HTTP/1.1): Caching", RFC 7234, DOI 10.17487/RFC7234, June 2014, <https://www.rfc-editor.org/info/rfc7234>.
+
+**[RFC8259]**
+Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, DOI 10.17487/RFC8259, December 2017, <https://www.rfc-editor.org/info/rfc8259>.
+
+### Informative References
+
+**[ACTIVITYSTREAMS]**
+Snell, J., Ed. and E. Prodromou, Ed., "Activity Streams 2.0", W3C Recommendation, May 2017, <https://www.w3.org/TR/activitystreams-core/>.
+
+**[JSONLINES]**
+JSON Lines, "JSON Lines text format, also called newline-delimited JSON", <https://jsonlines.org/>.
+
+**[SCHEMA.ORG]**
+Schema.org Community Group, "Schema.org - Schema.org", <https://schema.org/>.
+
+**[SITEMAP]**
+Sitemaps.org, "Sitemaps XML format", <https://www.sitemaps.org/protocol.html>.
 
 ## Examples
 
@@ -1165,7 +1310,7 @@ Future versions may introduce new content block types or optional fields. Parser
 }
 ```
 
-### Example 4: Page with Structured Data
+### Example 4: Product Page with Schema.org Data
 
 ```json
 {
@@ -1174,20 +1319,29 @@ Future versions may introduce new content block types or optional fields. Parser
   "description": "The best widget ever made",
   "modified": "2025-01-15T10:00:00Z",
   "language": "en",
+  "schema": {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "Amazing Widget",
+    "description": "The best widget ever made",
+    "brand": {"@type": "Brand", "name": "WidgetCo"},
+    "offers": {
+      "@type": "Offer",
+      "price": "29.99",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.5",
+      "reviewCount": "89"
+    }
+  },
   "content": [
     {"type": "heading", "level": 1, "text": "Amazing Widget"},
-    {"type": "text", "text": "This widget will change your life."},
-    {"type": "structured", "format": "json-ld", "data": {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "Amazing Widget",
-      "description": "The best widget ever made",
-      "offers": {
-        "@type": "Offer",
-        "price": "29.99",
-        "priceCurrency": "USD"
-      }
-    }}
+    {"type": "text", "text": "This widget will change your life. Now with 50% more amazingness!"},
+    {"type": "list", "ordered": false, "items": ["High quality materials", "2-year warranty", "Free shipping"]},
+    {"type": "image", "url": "https://example.com/images/widget.jpg", "alt": "Amazing Widget product photo"}
   ]
 }
 ```
@@ -1204,7 +1358,7 @@ Future versions may introduce new content block types or optional fields. Parser
 {"url":"https://example.com/blog/post-3","title":"Third Post","description":"The third post"...}
 ```
 
-**After gzip compression**: Binary file, ~60% smaller than uncompressed
+**After gzip compression**: Binary file
 
 **Usage**:
 1. Crawler downloads `blog-2025-q1.scp.gz`

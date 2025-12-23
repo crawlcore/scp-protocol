@@ -124,14 +124,6 @@ def test_parse_with_checksum(tmp_path: Path) -> None:
     assert metadata.checksum.startswith("sha256:")
 
 
-def test_parse_without_validation(example_snapshot: Path) -> None:
-    """Test parsing without schema validation."""
-    scp_parser = parser.SCPParser(validate=False)
-    metadata, pages = scp_parser.parse_file(example_snapshot)
-
-    assert len(pages) == 2
-
-
 def test_parse_delta_collection(tmp_path: Path) -> None:
     """Test parsing delta collection."""
     gen = generator.SCPGenerator("test-delta", "blog", "delta", since="2025-01-14T00:00:00Z")

@@ -77,7 +77,7 @@ scp-inspect --json collection.scp.gz > output.json
 scp-inspect --url "https://example.com/page" collection.scp.gz
 
 # Show only pages modified after date
-scp-inspect --since "2025-01-15T00:00:00Z" collection.scp.gz
+scp-inspect --since "2000-01-15T00:00:00Z" collection.scp.gz
 ```
 
 
@@ -100,7 +100,7 @@ scp-inspect --json collection.scp.gz > data.json
 
 **View recent changes (delta)**:
 ```bash
-scp-inspect --pages --since "2025-01-15T00:00:00Z" collection.scp.gz
+scp-inspect --pages --since "2000-01-15T00:00:00Z" collection.scp.gz
 ```
 
 **Debug content blocks**:

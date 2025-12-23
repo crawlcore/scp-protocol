@@ -2,36 +2,48 @@
 
 ## What is SCP?
 
-The Site Content Protocol (SCP) is a collection-based format for efficiently serving web content to crawlers while users continue accessing regular HTML pages.
+The Site Content Protocol (SCP) is a format for serving clean, structured web content to AI training systems and search engines. Websites provide pre-generated JSON collections optimized for machine consumption, while end users continue accessing regular HTML pages.
 
 ## Problem
 
-Web crawlers (search engines, AI bots, aggregators) consume massive bandwidth and server resources by parsing web-pages designed for human viewing.
-With the explosion of AI crawlers, this traffic has become a significant cost for websites and strain on internet infrastructure.
+AI training systems and search engines need massive web content datasets, but current HTML scraping approaches create three critical problems:
 
-Sources:
-
-- [Cloudflare Year in Review 2025](https://radar.cloudflare.com/year-in-review/2025)
-- [FOSS Infrastructure Under Attack by AI Companies](https://thelibre.news/foss-infrastructure-is-under-attack-by-ai-companies/)
-- [Web Scraping Market Report 2025](https://scrapeops.io/web-scraping-playbook/web-scraping-market-report-2025/)
+1. **Low-quality training data** - Content extracted from HTML is contaminated with navigation menus, advertisements, boilerplate text, and formatting markup, degrading model training quality.
+2. **High infrastructure costs** - Processing complete HTML/CSS/JavaScript responses for millions of pages creates substantial bandwidth and computational overhead for both publishers and crawlers.
+3. **Legal and ethical uncertainty** - Automated scraping exists in a gray area. Websites lack a clear, voluntary mechanism to contribute high-quality content to AI training while maintaining control over their intellectual property.
 
 ## Solution
 
-Websites pre-generate compressed collections and host them on CDN or Cloud Object Storage:
+SCP provides a voluntary, structured alternative to HTML scraping:
 
-1. Website generates `blog-snapshot-2025-01-15.scp.gz` (5,247 pages → 52 MB)
+**For Publishers:**
+
+- Generate clean JSON collections from your CMS/database (not HTML parsing)
+- Host compressed files on CDN or object storage
+- Declare collection availability in sitemap.xml
+- Maintain full control over what content is included
+
+**For Crawlers:**
+
+- Download entire content sections in one request
+- Receive structured data optimized for training/indexing
+- Use efficient delta updates (only changed pages)
+- Respect publisher-provided content boundaries
+
+**Example:**
+
+1. Website generates `blog-snapshot-day15.scp.gz` (5,247 pages → 52 MB)
 2. Uploads to CDN or Cloud Object Storage
-3. Declares availability of content collections in sitemap.xml
-4. Crawler downloads entire collection in one request
-5. Later: crawler downloads delta `blog-delta-2025-01-16.scp.gz` (47 pages → 480 KB)
+3. Crawler downloads entire collection in one request
+4. Later: crawler downloads delta `blog-delta-day16.scp.gz` (47 pages → 480 KB)
 
 ### Expected Impact
 
-- 50-60% bandwidth reduction for initial snapshots
-- 90-95% bandwidth reduction with delta updates
-- Faster parsing than HTML/CSS/JS
-- 90% fewer requests (one download fetches entire sections)
-- Zero impact on user experience
+- **Clean training data**: Structured content without navigation menus, ads, boilerplate, or formatting markup
+- **Voluntary contribution**: Clear mechanism for sites to contribute high-quality content to AI training with explicit consent
+- **Reduced infrastructure costs**: Lower bandwidth and processing overhead for both publishers and crawlers
+- **Efficient updates**: Delta collections deliver only changed pages, minimizing redundant transfers
+- **Zero user impact**: End users continue accessing regular HTML pages
 
 ## Documentation
 
@@ -54,16 +66,10 @@ Websites pre-generate compressed collections and host them on CDN or Cloud Objec
 
 **Next Steps**:
 
-1. Community feedback (3 months)
+1. Community feedback (1 month)
      - Post to Hacker News, Reddit, tech blogs
      - Iterate on spec based on feedback
-2. Creation of IETF Internet-Draft (2 months)
-
-**Future**:
-
-- Bot verification using [Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/)
-- Pay-per-crawl model similar to [Cloudflare's Pay Per Crawl](https://blog.cloudflare.com/introducing-pay-per-crawl/)
-
+2. Update of IETF Internet-Draft (2 weeks)
 
 ## License
 

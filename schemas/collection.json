@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://scp-protocol.org/schemas/collection/0.1.json",
+  "title": "SCP Collection Metadata",
+  "description": "Schema for SCP collection metadata (first line of .scp file)",
+  "type": "object",
+  "required": ["collection"],
+  "properties": {
+    "collection": {
+      "type": "object",
+      "required": ["id", "section", "type", "generated", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9-_]+$",
+          "description": "Unique identifier for this collection"
+        },
+        "section": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9-_]+$",
+          "description": "Section name (e.g., blog, docs, all)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["snapshot", "delta"],
+          "description": "Collection type"
+        },
+        "generated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when collection was generated"
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Required for delta collections - changes since this timestamp"
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^sha256:[a-fA-F0-9]{64}$",
+          "description": "Optional SHA-256 checksum for integrity verification"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$",
+          "description": "SCP format version"
+        }
+      },
+      "if": {
+        "properties": {
+          "type": { "const": "delta" }
+        }
+      },
+      "then": {
+        "required": ["id", "section", "type", "generated", "since", "version"]
+      }
+    }
+  }
+}

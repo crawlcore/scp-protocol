@@ -31,13 +31,13 @@ for page in pages[:5]:
 ```python
 from scp.generator import SCPGenerator
 
-gen = SCPGenerator("blog-snapshot-2025-01", "blog", "snapshot")
+gen = SCPGenerator("blog-snapshot-q1", "blog", "snapshot")
 
 gen.add_page(
     url="https://example.com/post1",
     title="First Post",
     description="My first blog post",
-    modified="2025-01-15T10:00:00Z",
+    modified="2000-01-15T10:00:00Z",
     language="en",
     content=[
         {"type": "heading", "level": 1, "text": "First Post"},
@@ -57,7 +57,7 @@ from scp.generator import SCPGenerator
 
 # Create generator for snapshot
 gen = SCPGenerator(
-    collection_id="blog-snapshot-2025-01-15",
+    collection_id="blog-snapshot-day15",
     section="blog",
     collection_type="snapshot"
 )
@@ -109,20 +109,22 @@ gen.save(f"blog-delta-{datetime.now().strftime('%Y-%m-%d')}.scp.gz", compress="g
 
 ## Hosting Collections
 
-### Cloudflare R2 (example)
+### Using Object Storage or CDN
+
+Upload collections to any S3-compatible object storage or CDN using tools like rclone, aws-cli, or provider-specific clients:
 
 ```bash
-# Upload to Cloudflare R2 using rclone
-rclone copy blog-snapshot.scp.gz r2:your-bucket/collections/
+# Example: Upload using rclone (works with AWS S3, Azure Blob, Google Cloud Storage, etc.)
+rclone copy blog-snapshot.scp.gz remote:your-bucket/collections/
 ```
 
-Configure rclone for R2:
+Configure rclone for S3-compatible storage:
 ```bash
-rclone config create r2 s3 \
-  provider Cloudflare \
-  access_key_id your-r2-access-key \
-  secret_access_key your-r2-secret-key \
-  endpoint https://your-account-id.r2.cloudflarestorage.com
+rclone config create remote s3 \
+  provider <your-provider> \
+  access_key_id your-access-key \
+  secret_access_key your-secret-key \
+  endpoint https://your-storage-endpoint.com
 ```
 
 ### Update Sitemap.xml
@@ -141,8 +143,8 @@ sitemap.add_section("blog", update_freq="daily", pages=5247)
 sitemap.add_collection(
     section="blog",
     collection_type="snapshot",
-    url="https://cdn.example.com/collections/blog-snapshot-2025-01-15.scp.gz",
-    generated="2025-01-15T00:00:00Z",
+    url="https://cdn.example.com/collections/blog-snapshot-day15.scp.gz",
+    generated="2000-01-15T00:00:00Z",
     pages=5247,
     size=52000000
 )
@@ -150,12 +152,12 @@ sitemap.add_collection(
 # Add delta
 sitemap.add_delta(
     section="blog",
-    period="2025-01-15",
-    url="https://cdn.example.com/collections/blog-delta-2025-01-15.scp.gz",
-    generated="2025-01-15T23:00:00Z",
+    period="day15",
+    url="https://cdn.example.com/collections/blog-delta-day15.scp.gz",
+    generated="2000-01-15T23:00:00Z",
     pages=47,
     size=480000,
-    since="2025-01-14T00:00:00Z"
+    since="2000-01-14T00:00:00Z"
 )
 
 # Save sitemap
@@ -173,14 +175,14 @@ sitemap.save("sitemap.xml")
 # Generate snapshot
 python generate_snapshot.py
 
-# Upload to R2
-rclone copy blog-snapshot.scp.gz r2:your-bucket/collections/
+# Upload to object storage
+rclone copy blog-snapshot.scp.gz remote:your-bucket/collections/
 
 # Update sitemap
 python update_sitemap.py
 
 # Upload sitemap
-rclone copy sitemap.xml r2:your-bucket/
+rclone copy sitemap.xml remote:your-bucket/
 ```
 
 Schedule with cron:

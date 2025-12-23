@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import orjson
 
 from scp import checksum, compression, schema
 from scp.exceptions import ChecksumError, DecompressionError, SizeLimitError, ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class CollectionMetadata:
@@ -66,14 +69,16 @@ class SCPParser:
     Parses line-by-line for memory efficiency.
     """
 
-    def __init__(self, validate: bool = True, strict: bool = False):
+    def __init__(self, strict: bool = False):
         """Initialize parser.
 
         Args:
-            validate: Whether to validate against JSON schemas (default: True)
             strict: Whether to raise on non-fatal errors like unknown content blocks
+
+        Note:
+            Validation is mandatory per SCP v0.1 specification.
+            Parsers MUST validate collection metadata and page objects.
         """
-        self.validate = validate
         self.strict = strict
         self.metadata: CollectionMetadata | None = None
         self.pages: list[Page] = []
@@ -130,9 +135,8 @@ class SCPParser:
         if "collection" not in metadata_dict:
             raise ValidationError("First line must contain collection metadata")
 
-        # Validate metadata
-        if self.validate:
-            schema.validate_collection_metadata(metadata_dict)
+        # Validate metadata (mandatory per SCP v0.1 spec)
+        schema.validate_collection_metadata(metadata_dict)
 
         self.metadata = CollectionMetadata(metadata_dict)
 
@@ -168,16 +172,34 @@ class SCPParser:
                     f"({page_size} > {schema.MAX_PAGE_SIZE})"
                 )
 
-            # Validate page
-            if self.validate:
-                try:
-                    schema.validate_page(page_dict)
-                except ValidationError as e:
-                    error_msg = f"Page validation failed at line {line_num}: {e}"
-                    if self.strict:
-                        raise ValidationError(error_msg) from e
-                    self._errors.append(error_msg)
-                    continue
+            # Validate page (mandatory per SCP v0.1 spec)
+            try:
+                schema.validate_page(page_dict)
+            except ValidationError as e:
+                error_msg = f"Page validation failed at line {line_num}: {e}"
+                if self.strict:
+                    raise ValidationError(error_msg) from e
+                self._errors.append(error_msg)
+                continue
+
+            # Check for unknown content block types (SCP v0.1 spec: MUST log warning, MUST continue)
+            if "content" in page_dict:
+                for block_idx, block in enumerate(page_dict["content"]):
+                    if isinstance(block, dict) and "type" in block:
+                        try:
+                            is_known = schema.validate_content_block(block)
+                            if not is_known:
+                                # MUST log warning for unknown types
+                                warning_msg = (
+                                    f"Unknown content block type '{block['type']}' "
+                                    f"at line {line_num}, block {block_idx}. "
+                                    f"Skipping block and continuing (per SCP v0.1 spec)."
+                                )
+                                logger.warning(warning_msg)
+                                self._errors.append(warning_msg)
+                        except ValidationError:
+                            # Known type but validation failed - already handled by page validation
+                            pass
 
             try:
                 page = Page(page_dict)
@@ -214,10 +236,9 @@ class SCPParser:
         if not lines:
             raise ValidationError("Empty data")
 
-        # Parse metadata
+        # Parse metadata (mandatory per SCP v0.1 spec)
         metadata_dict = orjson.loads(lines[0])
-        if self.validate:
-            schema.validate_collection_metadata(metadata_dict)
+        schema.validate_collection_metadata(metadata_dict)
         self.metadata = CollectionMetadata(metadata_dict)
 
         # Verify checksum
@@ -231,8 +252,26 @@ class SCPParser:
                 continue
 
             page_dict = orjson.loads(line)
-            if self.validate:
-                schema.validate_page(page_dict)
+            # Validate page (mandatory per SCP v0.1 spec)
+            schema.validate_page(page_dict)
+
+            # Check for unknown content block types (SCP v0.1 spec: MUST log warning, MUST continue)
+            if "content" in page_dict:
+                for block_idx, block in enumerate(page_dict["content"]):
+                    if isinstance(block, dict) and "type" in block:
+                        try:
+                            is_known = schema.validate_content_block(block)
+                            if not is_known:
+                                # MUST log warning for unknown types
+                                warning_msg = (
+                                    f"Unknown content block type '{block['type']}' "
+                                    f"at line {line_num}, block {block_idx}. "
+                                    f"Skipping block and continuing (per SCP v0.1 spec)."
+                                )
+                                logger.warning(warning_msg)
+                        except ValidationError:
+                            # Known type but validation failed - already handled by page validation
+                            pass
 
             self.pages.append(Page(page_dict))
 
@@ -240,17 +279,19 @@ class SCPParser:
 
 
 def parse_collection(
-    file_path: str | Path, validate: bool = True, strict: bool = False
+    file_path: str | Path, strict: bool = False
 ) -> tuple[CollectionMetadata, list[Page]]:
     """Parse SCP collection file (convenience function).
 
     Args:
         file_path: Path to .scp, .scp.gz, or .scp.zst file
-        validate: Whether to validate against JSON schemas
         strict: Whether to raise on non-fatal errors
 
     Returns:
         Tuple of (metadata, pages)
+
+    Note:
+        Validation is mandatory per SCP v0.1 specification.
     """
-    parser = SCPParser(validate=validate, strict=strict)
+    parser = SCPParser(strict=strict)
     return parser.parse_file(file_path)
