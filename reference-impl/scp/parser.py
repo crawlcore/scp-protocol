@@ -54,7 +54,6 @@ class Page:
         self.modified = data["modified"]
         self.language = data["language"]
         self.canonical = data.get("canonical")
-        self.robots = data.get("robots", [])
         self.schema_data = data.get("schema")
         self.content = data["content"]
 

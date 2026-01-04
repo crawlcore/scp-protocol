@@ -88,13 +88,13 @@ def test_roundtrip_all_content_types(tmp_path: Path) -> None:
             {"type": "quote", "text": "Quote", "citation": "Author"},
             {
                 "type": "video",
-                "sources": [{"url": "https://example.com/video.mp4"}],
-                "title": "Video",
+                "name": "Video",
+                "url": [{"href": "https://example.com/video.mp4", "mediaType": "video/mp4"}],
             },
             {
                 "type": "audio",
-                "sources": [{"url": "https://example.com/audio.mp3"}],
-                "title": "Audio",
+                "name": "Audio",
+                "url": [{"href": "https://example.com/audio.mp3", "mediaType": "audio/mpeg"}],
             },
             {"type": "structured", "format": "json-ld", "data": {"@type": "Thing"}},
         ],

@@ -58,7 +58,6 @@ class SCPGenerator:
         author: str | None = None,
         published: str | None = None,
         canonical: str | None = None,
-        robots: list[str] | None = None,
         schema_data: dict | None = None,
     ) -> None:
         """Add a page to the collection.
@@ -73,7 +72,6 @@ class SCPGenerator:
             author: Optional author name
             published: Optional ISO 8601 publication date
             canonical: Optional canonical URL
-            robots: Optional list of robot directives
             schema_data: Optional Schema.org structured data
         """
         page = {
@@ -91,8 +89,6 @@ class SCPGenerator:
             page["published"] = published
         if canonical:
             page["canonical"] = canonical
-        if robots:
-            page["robots"] = robots
         if schema_data:
             page["schema"] = schema_data  # type: ignore[assignment]
 

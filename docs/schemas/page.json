@@ -44,15 +44,6 @@
       "format": "uri",
       "description": "Canonical URL"
     },
-    "robots": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "enum": ["noindex", "nofollow", "noarchive", "nosnippet", "notranslate", "noimageindex"]
-      },
-      "uniqueItems": true,
-      "description": "Robot directives"
-    },
     "schema": {
       "type": "object",
       "description": "Optional Schema.org structured data (JSON-LD format)"
@@ -162,29 +153,45 @@
         },
         {
           "type": "object",
-          "required": ["type", "sources", "title"],
+          "required": ["type", "name", "url"],
           "properties": {
             "type": { "const": "video" },
-            "sources": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "required": ["url"],
-                "properties": {
-                  "url": { "type": "string", "format": "uri" },
-                  "format": { "type": "string" },
-                  "quality": { "type": "string" },
-                  "size": { "type": "integer" }
+            "name": { "type": "string", "description": "Video title" },
+            "url": {
+              "oneOf": [
+                { "type": "string", "format": "uri" },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["href", "mediaType"],
+                    "properties": {
+                      "href": { "type": "string", "format": "uri" },
+                      "mediaType": { "type": "string" },
+                      "rel": { "type": "string" }
+                    }
+                  }
                 }
-              }
+              ],
+              "description": "Video URL(s) - ActivityStreams 2.0 format"
             },
-            "poster": { "type": "string", "format": "uri" },
-            "title": { "type": "string" },
-            "description": { "type": "string" },
-            "duration": { "type": "integer", "minimum": 0 },
+            "duration": {
+              "type": "string",
+              "pattern": "^PT(?=.*[HMS])(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+              "description": "ISO 8601 duration (e.g., PT5M20S)"
+            },
             "width": { "type": "integer", "minimum": 0 },
             "height": { "type": "integer", "minimum": 0 },
+            "icon": {
+              "type": "object",
+              "properties": {
+                "type": { "const": "Image" },
+                "url": { "type": "string", "format": "uri" }
+              },
+              "description": "Thumbnail/poster image"
+            },
+            "summary": { "type": "string", "description": "Video description" },
             "captions": {
               "type": "array",
               "items": {
@@ -208,37 +215,50 @@
                 }
               }
             },
-            "embed": { "type": "string", "format": "uri" },
             "transcript": { "type": "string" }
           },
           "additionalProperties": false
         },
         {
           "type": "object",
-          "required": ["type", "sources", "title"],
+          "required": ["type", "name", "url"],
           "properties": {
             "type": { "const": "audio" },
-            "sources": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "required": ["url"],
-                "properties": {
-                  "url": { "type": "string", "format": "uri" },
-                  "format": { "type": "string" },
-                  "bitrate": { "type": "integer" },
-                  "size": { "type": "integer" }
+            "name": { "type": "string", "description": "Audio title" },
+            "url": {
+              "oneOf": [
+                { "type": "string", "format": "uri" },
+                {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": ["href", "mediaType"],
+                    "properties": {
+                      "href": { "type": "string", "format": "uri" },
+                      "mediaType": { "type": "string" }
+                    }
+                  }
                 }
-              }
+              ],
+              "description": "Audio URL(s) - ActivityStreams 2.0 format"
             },
-            "title": { "type": "string" },
-            "description": { "type": "string" },
-            "artist": { "type": "string" },
-            "album": { "type": "string" },
-            "duration": { "type": "integer", "minimum": 0 },
-            "coverArt": { "type": "string", "format": "uri" },
-            "transcript": { "type": "string" },
+            "duration": {
+              "type": "string",
+              "pattern": "^PT(?=.*[HMS])(\\d+H)?(\\d+M)?(\\d+(\\.\\d+)?S)?$",
+              "description": "ISO 8601 duration (e.g., PT1H for 1 hour)"
+            },
+            "icon": {
+              "type": "object",
+              "properties": {
+                "type": { "const": "Image" },
+                "url": { "type": "string", "format": "uri" }
+              },
+              "description": "Cover art/thumbnail image"
+            },
+            "summary": { "type": "string", "description": "Audio description" },
+            "attributedTo": { "type": "string", "description": "Artist/creator name or Person object" },
+            "partOf": { "type": "string", "description": "Album/series name or Collection object" },
             "chapters": {
               "type": "array",
               "items": {
@@ -249,7 +269,8 @@
                   "title": { "type": "string" }
                 }
               }
-            }
+            },
+            "transcript": { "type": "string" }
           },
           "additionalProperties": false
         },
